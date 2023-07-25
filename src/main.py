@@ -5,8 +5,10 @@ from bs4 import BeautifulSoup
 
 from configs import configure_argument_parser, configure_logging
 
-from constants import BASE_DIR, MAIN_DOC_URL
-from utils import get_response, find_tag
+from constants import (
+    BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL, EXPECTED_STATUS
+)
+from utils import get_response, find_tag, check_pep_status
 
 from outputs import control_output
 
@@ -115,8 +117,52 @@ def download(session):
     logging.info(f'Архив был загружен и сохранён: {archive_path}')
 
 
-def pep():
-    pass
+def status_search(session, url):
+    response = get_response(session, url)
+    if response is None:
+        return
+
+    soup = BeautifulSoup(response.text,  features='lxml')
+
+    info_block = find_tag(soup, 'dl', {'class': 'rfc2822 field-list simple'})
+    all_tags = info_block.find_all('dt')
+
+    for tag in all_tags:
+        if tag.text == r'*Status*':
+            status = tag.find_next('dd')
+            status_text = status.find('abbr')
+            return tag.text
+
+
+def pep(session):
+    response = get_response(session, MAIN_PEP_URL)
+    if response is None:
+        return
+
+    soup = BeautifulSoup(response.text, features='lxml')
+
+    all_index_table = find_tag(
+        soup, 'section', attrs={'id': 'index-by-category'}
+    )
+    count_pep = 0
+    separated_tables = all_index_table.find_all('tbody')
+    for table in separated_tables:
+        rows = table.find_all('tr')
+        for row in rows:
+            status = row.find('td')
+            preview_status = status.text[1:]
+            page_status = ''
+
+            number = status.find_next('td')
+            link_number = number.find('a')
+            link = link_number['href']
+            pep_url = urljoin(MAIN_PEP_URL, link)
+            page_status = status_search(session, pep_url)
+            # check_pep_status(number, preview_status, page_status)
+            count_pep += 1
+            print(preview_status, number.text, pep_url, page_status)
+
+    print(count_pep)
 
 
 MODE_TO_FUNCTION = {
