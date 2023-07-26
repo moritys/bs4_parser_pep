@@ -5,8 +5,10 @@ from bs4 import BeautifulSoup
 
 from configs import configure_argument_parser, configure_logging
 
+from collections import Counter
+
 from constants import (
-    BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL, EXPECTED_STATUS
+    BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
 )
 from utils import get_response, find_tag, check_pep_status
 
@@ -33,7 +35,7 @@ def whats_new(session):
         'li', attrs={'class': 'toctree-l1'}
     )
 
-    results = [('Ссылка на статью', 'Заголовок', 'Редактор, автор')]
+    results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(section_by_python):
         version_a_tag = find_tag(section, 'a')
         href = version_a_tag['href']
@@ -61,7 +63,7 @@ def latest_versions(session):
 
     soup = BeautifulSoup(response.text, features='lxml')
 
-    sidebar = find_tag(soup, 'div', class_='sphinxsidebarwrapper')
+    sidebar = find_tag(soup, 'div', {'class': 'sphinxsidebarwrapper'})
     ul_tags = sidebar.find_all('ul')
 
     for ul in ul_tags:
@@ -118,6 +120,7 @@ def download(session):
 
 
 def status_search(session, url):
+    """Поиск статуса на отдельной странице."""
     response = get_response(session, url)
     if response is None:
         return
@@ -125,13 +128,13 @@ def status_search(session, url):
     soup = BeautifulSoup(response.text,  features='lxml')
 
     info_block = find_tag(soup, 'dl', {'class': 'rfc2822 field-list simple'})
-    all_tags = info_block.find_all('dt')
+    all_dt_tags_in_info = info_block.find_all('dt')
 
-    for tag in all_tags:
-        if tag.text == r'*Status*':
-            status = tag.find_next('dd')
-            status_text = status.find('abbr')
-            return tag.text
+    for dt in all_dt_tags_in_info:
+        if dt.text == 'Status:':
+            status = dt.find_next('dd')
+            status_text_tag = status.find('abbr')
+            return status_text_tag.text
 
 
 def pep(session):
@@ -144,25 +147,36 @@ def pep(session):
     all_index_table = find_tag(
         soup, 'section', attrs={'id': 'index-by-category'}
     )
-    count_pep = 0
+
+    count_pep = 0  # счетчик всех pep
+    count_statuses = []  # хранение всех статусов
+    results = [('Статус', 'Количество')]  # итоговая таблица
+
     separated_tables = all_index_table.find_all('tbody')
     for table in separated_tables:
         rows = table.find_all('tr')
-        for row in rows:
-            status = row.find('td')
-            preview_status = status.text[1:]
-            page_status = ''
 
-            number = status.find_next('td')
-            link_number = number.find('a')
-            link = link_number['href']
-            pep_url = urljoin(MAIN_PEP_URL, link)
+        for row in tqdm(rows, desc='Считывание строк pep'):
+            status_tag = row.find('td')
+            preview_status = status_tag.text[1:]
+            number_tag = status_tag.find_next('td')
+            link_number_tag = number_tag.find('a')
+            link_to_pep_page = link_number_tag['href']
+            pep_url = urljoin(MAIN_PEP_URL, link_to_pep_page)
             page_status = status_search(session, pep_url)
-            # check_pep_status(number, preview_status, page_status)
-            count_pep += 1
-            print(preview_status, number.text, pep_url, page_status)
 
-    print(count_pep)
+            if preview_status:
+                check_pep_status(link_to_pep_page, preview_status, page_status)
+
+            count_pep += 1
+            count_statuses.append(page_status)
+
+    counter = Counter(count_statuses)  # подсчет каждого статуса
+    for status in counter:
+        results.append((status, counter[status]))
+
+    results.append(('Total', count_pep))
+    return results
 
 
 MODE_TO_FUNCTION = {

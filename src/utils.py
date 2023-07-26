@@ -27,10 +27,12 @@ def find_tag(soup, tag, attrs=None):
 
 
 def check_pep_status(pep_name, preview_status, page_status):
-    if EXPECTED_STATUS[preview_status] != page_status:
-        logging.info(
-            'Несовпадающие статусы:',
-            f'"{pep_name}"',
-            f'Статус на превью: {preview_status}',
-            f'Статус на странице: {page_status}'
-        )
+    error_message = (
+        'Несовпадающие статусы: \n'
+        f'"{pep_name}" \n'
+        f'Статус на превью: {preview_status} \n'
+        f'Статус на странице: {page_status}'
+    )
+    if page_status not in EXPECTED_STATUS[preview_status]:
+        logging.info(error_message)
+    return
