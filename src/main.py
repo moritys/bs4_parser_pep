@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 from configs import configure_argument_parser, configure_logging
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 from constants import (
     BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
@@ -148,10 +148,7 @@ def pep(session):
         soup, 'section', attrs={'id': 'index-by-category'}
     )
 
-    count_pep = 0  # счетчик всех pep
-    count_statuses = []  # хранение всех статусов
-    results = [('Статус', 'Количество')]  # итоговая таблица
-
+    count_statuses_dict = defaultdict(int)
     separated_tables = all_index_table.find_all('tbody')
     for table in separated_tables:
         rows = table.find_all('tr')
@@ -161,22 +158,16 @@ def pep(session):
             preview_status = status_tag.text[1:]
             number_tag = status_tag.find_next('td')
             link_number_tag = number_tag.find('a')
-            link_to_pep_page = link_number_tag['href']
+            link_to_pep_page = link_number_tag['href'] + '/'
             pep_url = urljoin(MAIN_PEP_URL, link_to_pep_page)
             page_status = status_search(session, pep_url)
-
+            count_statuses_dict[page_status] += 1
             if preview_status:
                 check_pep_status(link_to_pep_page, preview_status, page_status)
 
-            count_pep += 1
-            count_statuses.append(page_status)
-
-    counter = Counter(count_statuses)  # подсчет каждого статуса
-    for status in counter:
-        results.append((status, counter[status]))
-
-    results.append(('Total', count_pep))
-    return results
+    return (('Статус', 'Количество'),
+            *count_statuses_dict.items(),
+            ('Total', sum(count_statuses_dict.values())))
 
 
 MODE_TO_FUNCTION = {
