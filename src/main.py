@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 from configs import configure_argument_parser, configure_logging
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 from constants import (
     BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
